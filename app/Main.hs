@@ -17,7 +17,7 @@ import Web.Spock.Config
 import Data.Aeson hiding (json)
 import Data.Monoid ((<>))
 import Data.Text (Text, pack, unpack)
-import System.FilePath (takeExtension)
+import System.FilePath (takeExtension, takeFileName)
 import Data.List (isPrefixOf)
 import GHC.Generics
 
@@ -52,18 +52,10 @@ app = do
     get root $ do
         file (pack "text/html; charset=utf-8") "public/index.html"
 
-    get ("public" <//> wildcard) $ \route -> do
+    get ("/" <//> wildcard) $ \route -> do
         let path = unpack route
-        let ending = takeExtension path
-        apiPrint ending
-        apiPrint path
-        case (tail ending) of
-          "gif" -> file (pack ("image/gif; charset=utf-8")) ("public/" ++ path)
-          otherwise -> file (pack ("text/" ++ (tail ending) ++ "; charset=utf-8")) ("public/" ++ path)
-
-    --get ("public/img" <//> var) $ \path -> do
-        --let ending = takeExtension path
-        --file (pack ("image/png; charset=utf-8")) ("public/img/" ++ path)
+        let reqType = getRequestType path
+        file (pack (getHttpHeader reqType)) ("public/" ++ path)
 
 
     get "people" $ do
@@ -96,3 +88,27 @@ errorJson code message =
 
 apiPrint :: String -> ApiAction ()
 apiPrint str = liftIO $ putStrLn str
+
+data RequestType = Html | Css | Js | Image String | Json | Plain
+    deriving (Show, Eq)
+
+imageFileEndings = ["gif", "png", "jpg", "jpeg", "svg"]
+
+getRequestType :: String -> RequestType
+getRequestType route 
+    | ending `elem` imageFileEndings = Image ending
+    | ending == "html" = Html
+    | ending == "css" = Css
+    | ending == "js" = Js
+    | otherwise = Plain
+    where ending = tail $ takeExtension route
+
+getHttpHeader :: RequestType -> String
+getHttpHeader req = case req of
+                      Html  -> "text/html; charset=utf-8"
+                      Css   -> "text/css; charset=utf-8"
+                      Js    -> "application/javascript; charset=utf-8"
+                      Image "svg" -> "image/svg+xml; charset=utf-8"
+                      Image ending -> "image/" ++ ending ++ "; charset=utf-8"
+                      Json -> "text/plain; charset=utf-8" -- TODO: Fix
+                      Plain -> "text/plain; charset=utf-8"
