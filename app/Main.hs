@@ -16,13 +16,14 @@ import Web.Spock.Config
 
 import Data.Aeson hiding (json)
 import Data.Monoid ((<>))
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import System.FilePath (takeExtension)
 import Data.List (isPrefixOf)
 import GHC.Generics
 
 
 import           Control.Monad.Logger    (LoggingT, runStdoutLoggingT)
+import           Control.Monad.IO.Class
 import           Database.Persist        hiding (get) -- To avoid a naming clash with Web.Spock.get
 import qualified Database.Persist        as P         -- We'll be using P.get later for GET /people/<id>.
 import           Database.Persist.Sqlite hiding (get)
@@ -48,6 +49,23 @@ main = do
 
 app :: Api
 app = do
+    get root $ do
+        file (pack "text/html; charset=utf-8") "public/index.html"
+
+    get ("public" <//> wildcard) $ \route -> do
+        let path = unpack route
+        let ending = takeExtension path
+        apiPrint ending
+        apiPrint path
+        case (tail ending) of
+          "gif" -> file (pack ("image/gif; charset=utf-8")) ("public/" ++ path)
+          otherwise -> file (pack ("text/" ++ (tail ending) ++ "; charset=utf-8")) ("public/" ++ path)
+
+    --get ("public/img" <//> var) $ \path -> do
+        --let ending = takeExtension path
+        --file (pack ("image/png; charset=utf-8")) ("public/img/" ++ path)
+
+
     get "people" $ do
         allPeople <- runSql $ selectList [] [Asc PersonId] -- SELECT but returns a list
         json allPeople
@@ -56,15 +74,6 @@ app = do
         case maybePerson of
             Nothing -> errorJson 2 "Could not find a person with mathcing id"
             Just thePerson -> json thePerson
-
-    get root $ do
-        file (pack "text/html") "public/index.html"
-            
-    get ("public" <//> var) $ \path -> do
-        --setHeader "Content-Type" "text/html; charset=utf-8" Not needed, is embedded in file
-        let ending = takeExtension path
-        file (pack ("text/" ++ (tail ending))) ("public/" ++ path)
-
     post "people" $ do
         maybePerson <- jsonBody :: ApiAction (Maybe Person)
         case maybePerson of
@@ -84,3 +93,6 @@ errorJson code message =
         [ "result" .= String "failure"
         , "error" .= object ["code" .= code, "message" .= message] -- (.=) constructs a Pair
         ]
+
+apiPrint :: String -> ApiAction ()
+apiPrint str = liftIO $ putStrLn str
