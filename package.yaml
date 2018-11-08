@@ -35,6 +35,14 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - Spock-rest
+    - aeson
+    - Spock
+    - text
+    - monad-logger
+    - persistent
+    - persistent-sqlite
+    - persistent-template
+    - filepath
 
 tests:
   Spock-rest-test:
